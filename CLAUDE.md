@@ -14,10 +14,11 @@ This repo holds a research plan plus a working POC for **V93000 (Advantest) DIB 
 Run from `poc/`:
 
 ```bash
-pip install -r requirements.txt          # numpy, scipy, matplotlib, ortools, pytest
-python -m pytest tests/                  # all tests (~1s; one CP-SAT test ~10s budget)
+pip install -r requirements.txt          # numpy, scipy, matplotlib, ortools, pytest, gymnasium, sb3
+python -m pytest tests/                  # all tests (~5s; one CP-SAT test ~10s budget)
 python -m pytest tests/test_pipeline.py::test_sa_then_legalize_reduces_distance_and_clears_drc -v
 python -m examples.run_poc               # end-to-end demo, writes PNGs to poc/artifacts/
+python -m examples.compare_sa_rl         # train PPO + 10-seed SA vs RL benchmark (~90 s)
 ```
 
 `run_poc.py` and `tests/conftest.py` both inject `poc/` onto `sys.path`, so `v93k_poc` imports work without installing the package. There is no `pyproject.toml`.
@@ -42,12 +43,17 @@ The POC pipeline operates on a single mutable `Board` (`v93k_poc/board.py`) hold
 - **`Component.logical_index`** pairs site-0 and site-1 components that should be mirrored. `synthetic.make_toy_board` increments `pair_idx` once per logical pair and assigns it to **both** the site-0 and site-1 cap created in lockstep. The symmetry penalty (in `p2_placement` and `metrics.site_symmetry_error`) groups by this index. If you add new components, you must assign matching `logical_index` values across sites or symmetry scoring will silently drop them.
 - **Cap initial offsets must push *away* from the socket centre.** In `synthetic.py`, `offset_y = -1.0 if rr == 0 else 1.0` exists because the synthetic socket places `r=0` at `cy - 2.5` (south edge); flipping the sign puts caps *inside* the keepout. `tests/test_metrics.py::test_drc_initially_clean` guards against this regression.
 
+### RL extension
+
+`v93k_poc/rl_env.py` exposes `V93KPlacementEnv` (Gymnasium-compatible). Observation = per-cap (own xy, target VDD xy, nearest-keepout dx/dy) normalised by board half-extent; action = per-cap continuous Δ(x, y) in [-1, 1] scaled by `step_mm`. Reward is `(E_prev - E_new) / E_init` using the **same** energy function as P2 SA, so RL and SA are directly comparable. `examples/compare_sa_rl.py` trains PPO (~80 s on CPU) and benchmarks both methods on 10 random seeds. Reference run shows SA dominates (E≈13 vs ≈190, sym 0.03 mm vs 10 mm) — expected, since the problem only has 16 free dimensions and SA is cheap. The harness exists so future GNN-evaluator or AlphaChip-checkpoint experiments can be slotted in cleanly.
+
 ### Test layout
 
 - `test_synthetic.py` — anchor/component counts, signal-type split, board geometry.
 - `test_metrics.py` — invariants on the factory layout (DRC-clean, symmetric).
 - `test_p1_mapping.py` — CP-SAT returns a valid one-to-one matching with signal-type compatibility.
 - `test_pipeline.py` — full random-init → SA → legalise smoke test; asserts post-legalise DRC=0, max cap-VDD < 6 mm, symmetry < 4 mm. Use this as the integration check after any algorithm tweak.
+- `test_rl_env.py` — observation/action shapes, zero-action no-op invariant, `max_steps` truncation contract. Does **not** train PPO — keep training out of the test suite.
 
 ## Branch / PR conventions
 
