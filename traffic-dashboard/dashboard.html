@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>入口流量偵測儀表板 (離線版)</title>
+<style>
+  :root {
+    --bg: #0f1623;
+    --card: #182238;
+    --card-border: #243150;
+    --text: #e6ecf5;
+    --muted: #8a96b0;
+    --accent: #4cc9f0;
+    --good: #2dd4bf;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .topbar h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls button {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .controls button:hover { background: #1f2c47; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot-live { background: var(--good); box-shadow: 0 0 8px var(--good); animation: pulse 1.4s infinite; }
+  .dot-paused { background: var(--warn); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 14px;
+    padding: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .span-2 { grid-column: 1 / span 2; }
+
+  /* KPI grid */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi {
+    background: #1f2c47;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .kpi .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; }
+  .kpi .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .kpi .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .kpi.good .value { color: var(--good); }
+  .kpi.warn .value { color: var(--warn); }
+  .kpi.bad  .value { color: var(--bad); }
+
+  /* canvas containers */
+  .canvas-wrap { position: relative; width: 100%; height: 180px; }
+  .canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+  .donut-wrap { display: flex; gap: 14px; align-items: center; }
+  .donut-wrap .canvas-wrap { width: 160px; height: 160px; flex: none; }
+  .legend { font-size: 12px; flex: 1; }
+  .legend ul { list-style: none; padding: 0; margin: 0; }
+  .legend li { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--text); }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .legend .count { color: var(--muted); margin-left: auto; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.6px; }
+  td.status-2xx { color: var(--good); }
+  td.status-3xx { color: var(--accent); }
+  td.status-4xx { color: var(--warn); }
+  td.status-5xx { color: var(--bad); font-weight: 600; }
+  .table-wrap { max-height: 280px; overflow-y: auto; }
+  .table-wrap::-webkit-scrollbar { width: 8px; }
+  .table-wrap::-webkit-scrollbar-thumb { background: #2c3a5c; border-radius: 4px; }
+
+  /* alerts */
+  .alerts { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+  .alert {
+    display: flex; gap: 10px; align-items: center;
+    padding: 8px 10px; border-radius: 6px; font-size: 12px;
+    border-left: 3px solid var(--warn);
+    background: rgba(245, 158, 11, 0.08);
+  }
+  .alert.bad { border-left-color: var(--bad); background: rgba(239, 68, 68, 0.1); }
+  .alert .when { color: var(--muted); font-size: 11px; min-width: 70px; }
+  .alert .icon { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🛰️ 入口流量偵測儀表板</h1>
+  <div class="controls">
+    <button id="btn-pause">⏸ 暫停</button>
+    <button id="btn-clear">🗑 清除</button>
+    <button id="btn-spike">⚡ 注入爆量</button>
+    <div class="status">
+      <span id="status-dot" class="dot dot-live"></span>
+      <span id="status-text">LIVE</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- KPI 列：橫跨兩欄 -->
+  <section class="card span-2">
+    <h2>關鍵指標 (近 60 秒)</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="label">總請求數</div><div class="value" id="kpi-total">0</div><div class="sub">累計</div></div>
+      <div class="kpi"><div class="label">平均 RPS</div><div class="value" id="kpi-rps">0</div><div class="sub">requests / sec</div></div>
+      <div class="kpi" id="kpi-err-card"><div class="label">錯誤率</div><div class="value" id="kpi-err">0%</div><div class="sub">4xx + 5xx</div></div>
+      <div class="kpi"><div class="label">P95 延遲</div><div class="value" id="kpi-p95">0 ms</div><div class="sub">回應時間</div></div>
+    </div>
+  </section>
+
+  <!-- 折線圖 -->
+  <section class="card">
+    <h2>每秒請求數 (RPS) - 近 60 秒</h2>
+    <div class="canvas-wrap"><canvas id="rps-chart"></canvas></div>
+  </section>
+
+  <!-- 端點分布 -->
+  <section class="card">
+    <h2>端點分布</h2>
+    <div class="donut-wrap">
+      <div class="canvas-wrap"><canvas id="endpoint-chart"></canvas></div>
+      <div class="legend"><ul id="endpoint-legend"></ul></div>
+    </div>
+  </section>
+
+  <!-- 即時請求列表 -->
+  <section class="card">
+    <h2>即時請求 (最新 30 筆)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>時間</th><th>方法</th><th>路徑</th><th>狀態</th><th>延遲</th><th>來源 IP</th></tr></thead>
+        <tbody id="req-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 異常警示 -->
+  <section class="card">
+    <h2>⚠️ 異常警示</h2>
+    <div class="alerts" id="alerts"></div>
+  </section>
+
+</main>
+
+<script>
+/* ===========================================================
+   入口流量偵測儀表板 - 完整單檔離線版
+   - 不依賴任何外部 CDN / 套件
+   - 圖表使用原生 Canvas 繪製
+   =========================================================== */
+
+/* ---------- 1. 模擬流量產生器 ---------- */
+const ENDPOINTS = [
+  { path: "/api/login",    weight: 3, color: "#4cc9f0" },
+  { path: "/api/users",    weight: 5, color: "#2dd4bf" },
+  { path: "/api/orders",   weight: 4, color: "#f59e0b" },
+  { path: "/api/products", weight: 6, color: "#a78bfa" },
+  { path: "/api/checkout", weight: 2, color: "#ef4444" },
+  { path: "/api/search",   weight: 5, color: "#f472b6" },
+  { path: "/api/health",   weight: 8, color: "#94a3b8" },
+];
+const COLOR_BY_PATH = Object.fromEntries(ENDPOINTS.map(e => [e.path, e.color]));
+
+const METHODS = ["GET","GET","GET","POST","POST","PUT","DELETE"];
+const STATUS_POOL = [
+  ...Array(85).fill(200),
+  ...Array(5).fill(201),
+  ...Array(3).fill(304),
+  ...Array(3).fill(400),
+  ...Array(2).fill(401),
+  ...Array(1).fill(404),
+  ...Array(1).fill(500),
+];
+
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const rndOctet = () => Math.floor(Math.random()*255)+1;
+const randIp = () => `${rndOctet()}.${rndOctet()}.${rndOctet()}.${rndOctet()}`;
+
+function weightedPick(items){
+  const total = items.reduce((s,it)=>s+it.weight,0);
+  let r = Math.random()*total;
+  for (const it of items){ r -= it.weight; if (r<=0) return it; }
+  return items[items.length-1];
+}
+
+function generateEvent(){
+  const status = pick(STATUS_POOL);
+  const base = status>=500 ? 400 : status>=400 ? 120 : 40;
+  return {
+    ts: Date.now(),
+    method: pick(METHODS),
+    path: weightedPick(ENDPOINTS).path,
+    status,
+    latencyMs: Math.round(base + Math.random()*180),
+    clientIp: randIp(),
+  };
+}
+
+/* ---------- 2. 狀態管理 ---------- */
+const state = {
+  paused: false,
+  forceSpikeNext: false,
+  rpsSeries: [],          // 近 60 秒每秒事件數
+  windowEvents: [],       // 近 60 秒所有事件，用於 KPI/分布
+  recent: [],             // 最新 30 筆
+  endpointCount: {},      // 端點累計
+  alerts: [],             // 警示
+  totalAll: 0,            // 從開始累計
+};
+
+/* ---------- 3. 訂閱機制 ---------- */
+const subs = [];
+const onTraffic = fn => subs.push(fn);
+
+function tick(){
+  if (state.paused) return;
+  const spike = state.forceSpikeNext || Math.random() < 0.05;
+  state.forceSpikeNext = false;
+  const n = spike ? 80 + Math.floor(Math.random()*60)
+                  : 5 + Math.floor(Math.random()*45);
+  const events = [];
+  for (let i=0;i<n;i++) events.push(generateEvent());
+  subs.forEach(fn => fn(events));
+}
+setInterval(tick, 1000);
+
+/* ---------- 4. 原生 Canvas 折線圖 ---------- */
+function setupCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function drawLineChart(canvas, series, opts={}){
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0,0,w,h);
+  const padL=36, padR=10, padT=10, padB=22;
+  const cw = w-padL-padR, ch = h-padT-padB;
+  const maxY = Math.max(10, ...series) * 1.15;
+
+  // grid + Y labels
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.fillStyle = "#8a96b0";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "right";
+  for (let i=0;i<=4;i++){
+    const y = padT + (ch*i)/4;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cw,y); ctx.stroke();
+    const v = Math.round(maxY - (maxY*i)/4);
+    ctx.fillText(v, padL-4, y+3);
+  }
+  // X axis (just current/start tick)
+  ctx.textAlign="left";
+  ctx.fillText(`-${series.length}s`, padL, h-6);
+  ctx.textAlign="right";
+  ctx.fillText("now", padL+cw, h-6);
+
+  if (series.length < 2) return;
+
+  // area fill
+  ctx.beginPath();
+  series.forEach((v,i)=>{
+    const x = padL + (cw*i)/(series.length-1);
+    const y = padT + ch - (v/maxY)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineTo(padL+cw, padT+ch);
+  ctx.lineTo(padL,    padT+ch);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(76,201,240,0.18)";
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  series.forEach((v,i)=>{
+    const x = padL + (cw*i)/(series.length-1);
+    const y = padT + ch - (v/maxY)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#4cc9f0";
+  ctx.stroke();
+}
+
+/* ---------- 5. 原生 Canvas 甜甜圈圖 ---------- */
+function drawDonut(canvas, slices){
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0,0,w,h);
+  const cx = w/2, cy = h/2;
+  const rOuter = Math.min(w,h)/2 - 6;
+  const rInner = rOuter * 0.6;
+  const total = slices.reduce((s,sl)=>s+sl.value,0);
+  if (total===0){
+    ctx.strokeStyle="#243150"; ctx.lineWidth = rOuter-rInner;
+    ctx.beginPath(); ctx.arc(cx,cy,(rOuter+rInner)/2,0,Math.PI*2); ctx.stroke();
+    return;
+  }
+  let start = -Math.PI/2;
+  for (const sl of slices){
+    const angle = (sl.value/total) * Math.PI*2;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,rOuter,start,start+angle);
+    ctx.closePath();
+    ctx.fillStyle = sl.color;
+    ctx.fill();
+    start += angle;
+  }
+  // hollow center
+  ctx.beginPath();
+  ctx.arc(cx,cy,rInner,0,Math.PI*2);
+  ctx.fillStyle = "#182238";
+  ctx.fill();
+  // total label
+  ctx.fillStyle = "#e6ecf5";
+  ctx.font = "bold 18px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(total, cx, cy+2);
+  ctx.font = "10px sans-serif";
+  ctx.fillStyle = "#8a96b0";
+  ctx.fillText("requests", cx, cy+18);
+}
+
+/* ---------- 6. 訂閱 → 更新狀態 ---------- */
+const rpsCanvas      = document.getElementById("rps-chart");
+const endpointCanvas = document.getElementById("endpoint-chart");
+
+onTraffic(events => {
+  // RPS 序列
+  state.rpsSeries.push(events.length);
+  if (state.rpsSeries.length > 60) state.rpsSeries.shift();
+
+  // 滑動視窗 (60s)
+  const cutoff = Date.now() - 60_000;
+  state.windowEvents.push(...events);
+  state.windowEvents = state.windowEvents.filter(e => e.ts >= cutoff);
+
+  // 最新 30 筆
+  state.recent = events.slice(-30).concat(state.recent).slice(0,30);
+
+  // 累計
+  state.totalAll += events.length;
+
+  // 端點計數（用視窗算更直觀）
+  state.endpointCount = {};
+  for (const e of state.windowEvents){
+    state.endpointCount[e.path] = (state.endpointCount[e.path]||0) + 1;
+  }
+
+  // 異常偵測
+  detectAnomalies(events);
+
+  // 重繪 UI
+  render();
+});
+
+/* ---------- 7. 異常偵測 ---------- */
+function detectAnomalies(batch){
+  const ts = new Date().toLocaleTimeString("zh-Hant",{hour12:false});
+
+  // 流量爆衝：當前秒 > 近 60 秒平均的 3 倍
+  if (state.rpsSeries.length >= 10){
+    const recent = state.rpsSeries.slice(-1)[0];
+    const avg = state.rpsSeries.slice(0,-1).reduce((a,b)=>a+b,0) / (state.rpsSeries.length-1);
+    if (recent > avg * 3 && recent > 40){
+      pushAlert("warn", `流量爆衝：本秒 ${recent} req (近 60s 均值 ${avg.toFixed(1)})`, ts);
+    }
+  }
+
+  // 錯誤率異常：本批 5xx 比例 > 8%
+  const fiveXX = batch.filter(e => e.status>=500).length;
+  if (batch.length>=20 && fiveXX/batch.length > 0.08){
+    pushAlert("bad", `5xx 錯誤率異常：${fiveXX}/${batch.length} (${(fiveXX/batch.length*100).toFixed(1)}%)`, ts);
+  }
+
+  // 高延遲
+  const slow = batch.filter(e => e.latencyMs > 500).length;
+  if (slow >= 5){
+    pushAlert("warn", `高延遲請求：${slow} 筆 > 500 ms`, ts);
+  }
+}
+function pushAlert(level, msg, when){
+  state.alerts.unshift({ level, msg, when });
+  if (state.alerts.length > 30) state.alerts.pop();
+}
+
+/* ---------- 8. 渲染 ---------- */
+const $ = id => document.getElementById(id);
+
+function percentile(arr, p){
+  if (!arr.length) return 0;
+  const sorted = [...arr].sort((a,b)=>a-b);
+  const idx = Math.min(sorted.length-1, Math.floor(sorted.length*p));
+  return sorted[idx];
+}
+
+function render(){
+  // ---- KPI ----
+  const w = state.windowEvents;
+  const total = state.totalAll;
+  const avgRps = w.length / Math.max(1, Math.min(60, state.rpsSeries.length));
+  const errs = w.filter(e => e.status>=400).length;
+  const errRate = w.length ? (errs/w.length*100) : 0;
+  const p95 = percentile(w.map(e=>e.latencyMs), 0.95);
+
+  $("kpi-total").textContent = total.toLocaleString();
+  $("kpi-rps").textContent   = avgRps.toFixed(1);
+  $("kpi-err").textContent   = errRate.toFixed(1) + "%";
+  $("kpi-p95").textContent   = p95 + " ms";
+
+  const errCard = $("kpi-err-card");
+  errCard.classList.remove("good","warn","bad");
+  errCard.classList.add(errRate < 3 ? "good" : errRate < 8 ? "warn" : "bad");
+
+  // ---- 折線圖 ----
+  drawLineChart(rpsCanvas, state.rpsSeries);
+
+  // ---- 甜甜圈 + 圖例 ----
+  const slices = Object.entries(state.endpointCount)
+    .map(([path,value]) => ({ path, value, color: COLOR_BY_PATH[path] || "#888" }))
+    .sort((a,b)=>b.value-a.value);
+  drawDonut(endpointCanvas, slices);
+
+  const legend = $("endpoint-legend");
+  legend.innerHTML = slices.map(s =>
+    `<li><span class="swatch" style="background:${s.color}"></span>${s.path}<span class="count">${s.value}</span></li>`
+  ).join("");
+
+  // ---- 即時請求列表 ----
+  const tbody = $("req-tbody");
+  tbody.innerHTML = state.recent.map(e => {
+    const time = new Date(e.ts).toLocaleTimeString("zh-Hant",{hour12:false});
+    const cls = "status-" + Math.floor(e.status/100) + "xx";
+    return `<tr>
+      <td>${time}</td>
+      <td>${e.method}</td>
+      <td>${e.path}</td>
+      <td class="${cls}">${e.status}</td>
+      <td>${e.latencyMs} ms</td>
+      <td>${e.clientIp}</td>
+    </tr>`;
+  }).join("");
+
+  // ---- 警示 ----
+  const al = $("alerts");
+  if (state.alerts.length === 0){
+    al.innerHTML = `<div style="color:var(--muted);font-size:12px;">無異常 ✓</div>`;
+  } else {
+    al.innerHTML = state.alerts.map(a => `
+      <div class="alert ${a.level==='bad'?'bad':''}">
+        <span class="icon">${a.level==='bad'?'🔥':'⚠️'}</span>
+        <span class="when">${a.when}</span>
+        <span>${a.msg}</span>
+      </div>
+    `).join("");
+  }
+}
+
+/* ---------- 9. 控制按鈕 ---------- */
+$("btn-pause").addEventListener("click", () => {
+  state.paused = !state.paused;
+  $("btn-pause").textContent = state.paused ? "▶ 繼續" : "⏸ 暫停";
+  $("status-dot").className = "dot " + (state.paused ? "dot-paused" : "dot-live");
+  $("status-text").textContent = state.paused ? "PAUSED" : "LIVE";
+});
+$("btn-clear").addEventListener("click", () => {
+  state.rpsSeries = [];
+  state.windowEvents = [];
+  state.recent = [];
+  state.endpointCount = {};
+  state.alerts = [];
+  state.totalAll = 0;
+  render();
+});
+$("btn-spike").addEventListener("click", () => {
+  state.forceSpikeNext = true;
+});
+
+window.addEventListener("resize", render);
+render();
+console.log("✓ Dashboard ready (offline single-file).");
+</script>
+</body>
+</html>
