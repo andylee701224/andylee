@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>入口流量偵測儀表板</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>入口流量偵測儀表板</h1>
+    <div class="status">
+      <span id="status-dot" class="dot dot-live"></span>
+      <span id="status-text">LIVE</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card">
+      <h2>每秒請求數 (RPS)</h2>
+      <canvas id="rps-chart" height="120"></canvas>
+    </section>
+
+    <section class="card placeholder">
+      <h2>(待加入) KPI 卡片區</h2>
+    </section>
+
+    <section class="card placeholder">
+      <h2>(待加入) 端點分布</h2>
+    </section>
+
+    <section class="card placeholder">
+      <h2>(待加入) 即時請求列表</h2>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
