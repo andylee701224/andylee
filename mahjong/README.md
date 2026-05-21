@@ -4,7 +4,17 @@
 
 ## 執行方式
 
-由於 `index.html` 用 `<script src="...">` 載入,不能直接 `file://` 開(部分瀏覽器會擋),需要起個本地伺服器:
+### 離線單檔版(最簡單,雙擊即玩)
+
+直接打開 `mahjong-standalone.html`,所有 CSS/JS 已 inline,無需網路、無需伺服器,可丟到 USB / 雲端帶著走。
+
+修改原始碼後重新打包:
+```bash
+cd mahjong
+node tests/build_standalone.js
+```
+
+### 本地伺服器(開發用)
 
 ```bash
 cd mahjong
