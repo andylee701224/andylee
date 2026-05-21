@@ -1,0 +1,16 @@
+# Build artifacts / packaged bundles
+*.zip
+*.tar.gz
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Python (V93K poc)
+__pycache__/
+*.pyc
+.pytest_cache/
+poc/artifacts/
