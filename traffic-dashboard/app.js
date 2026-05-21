@@ -105,9 +105,23 @@ const rpsChart = new Chart(rpsCtx, {
   },
 });
 
-// ---------- Step 2 驗證：把每秒事件數印到 console ----------
+// ---------- Step 3: 把每秒事件數餵給折線圖（保留最近 60 秒）----------
+const MAX_POINTS = 60;
+
+function pushRpsPoint(count) {
+  const label = new Date().toLocaleTimeString("zh-Hant", { hour12: false });
+  const data = rpsChart.data;
+  data.labels.push(label);
+  data.datasets[0].data.push(count);
+  if (data.labels.length > MAX_POINTS) {
+    data.labels.shift();
+    data.datasets[0].data.shift();
+  }
+  rpsChart.update("none");
+}
+
 onTraffic((events) => {
-  console.log(`[traffic] +${events.length} events, sample:`, events[0]);
+  pushRpsPoint(events.length);
 });
 
-console.log("Step 2 OK: traffic generator running, see console for events.");
+console.log("Step 3 OK: RPS chart is live, last 60s rolling window.");
