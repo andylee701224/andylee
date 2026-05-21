@@ -1,0 +1,107 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  background: #0a2818;
+  color: #fff;
+  overflow: hidden;
+}
+#app { display: flex; flex-direction: column; align-items: center; padding: 8px; }
+#topbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: linear-gradient(180deg, #1a3d28, #0f2a1a);
+  border-bottom: 1px solid #2a5a3a;
+  margin-bottom: 8px;
+}
+h1 { font-size: 18px; color: #ffcc66; letter-spacing: 2px; }
+#status {
+  flex: 1;
+  font-size: 14px;
+  color: #cde7d0;
+  padding: 0 12px;
+}
+#controls { display: flex; gap: 6px; }
+#controls button {
+  background: #2a5a3a;
+  color: #fff;
+  border: 1px solid #4a8a5a;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  display: none;
+  transition: all 0.15s;
+}
+#controls button:hover { background: #3a7a4a; }
+#controls button.primary {
+  background: #c0721a;
+  border-color: #e09020;
+}
+#controls button.primary:hover { background: #d0822a; }
+#btn-new { display: inline-block; background: #444; border-color: #666; }
+
+#table {
+  display: block;
+  background: #0a4828;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-content {
+  background: linear-gradient(180deg, #2a4a3a, #1a3a28);
+  border: 2px solid #ffcc66;
+  border-radius: 12px;
+  padding: 24px 32px;
+  min-width: 320px;
+  max-width: 480px;
+  text-align: center;
+}
+.modal-content h2 {
+  color: #ffcc66;
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+.tai-total {
+  font-size: 48px;
+  font-weight: bold;
+  color: #ff9933;
+  margin: 16px 0;
+}
+.modal-content ul {
+  list-style: none;
+  text-align: left;
+  margin: 16px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.modal-content li {
+  padding: 4px 8px;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.modal-content li span { color: #ffcc66; font-weight: bold; }
+.modal-content button {
+  margin-top: 16px;
+  padding: 10px 24px;
+  background: #c0721a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  font-family: inherit;
+}
